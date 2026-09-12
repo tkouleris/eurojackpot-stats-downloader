@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import os
 import sys
 import time
@@ -15,6 +16,14 @@ from playwright.sync_api import sync_playwright
 URL = "https://www.allwyn.gr/el/eurojackpot/draws-results"
 TARGET_YEAR = "2026"
 OUTPUT_DIR = Path(__file__).parent / "downloads"
+LOG_FILE = Path(__file__).parent / "log.txt"
+
+
+def log_to_file(message: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    clean_msg = message.strip()
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp}] {clean_msg}\n")
 
 
 def download_eurojackpot_draws(
@@ -29,7 +38,9 @@ def download_eurojackpot_draws(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Eurojackpot για το έτος {year}...")
+    log_to_file(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Eurojackpot για το έτος {year}...")
     print(f"[*] Σελίδα στόχος: {url}")
+    log_to_file(f"[*] Σελίδα στόχος: {url}")
 
     downloaded_file_path = None
 
@@ -51,6 +62,7 @@ def download_eurojackpot_draws(
                         launch_args["channel"] = channel
                     browser = p.chromium.launch(**launch_args)
                     print(f"[*] Επιτυχής εκκίνηση προγράμματος περιήγησης (channel: {channel or 'default chromium'}).")
+                    log_to_file(f"[*] Επιτυχής εκκίνηση προγράμματος περιήγησης (channel: {channel or 'default chromium'}).")
                     break
                 except Exception:
                     continue
@@ -65,6 +77,7 @@ def download_eurojackpot_draws(
 
                 try:
                     print("[*] Φόρτωση της σελίδας...")
+                    log_to_file("[*] Φόρτωση της σελίδας...")
                     page.goto(url, wait_until="domcontentloaded", timeout=45000)
                     time.sleep(2)
 
@@ -81,6 +94,7 @@ def download_eurojackpot_draws(
                             btn = page.locator(selector).first
                             if btn.is_visible(timeout=1500):
                                 print("[*] Αποδοχή cookies...")
+                                log_to_file("[*] Αποδοχή cookies...")
                                 btn.click()
                                 time.sleep(1)
                                 break
@@ -99,6 +113,7 @@ def download_eurojackpot_draws(
 
                     if download_select and download_select.count() > 0:
                         print(f"[*] Επιλογή έτους {year} στο τμήμα «Αρχείο Αποτελεσμάτων»...")
+                        log_to_file(f"[*] Επιλογή έτους {year} στο τμήμα «Αρχείο Αποτελεσμάτων»...")
                         try:
                             with page.expect_download(timeout=15000) as download_info:
                                 download_select.select_option(year)
@@ -108,21 +123,26 @@ def download_eurojackpot_draws(
                             download.save_as(save_path)
                             downloaded_file_path = save_path
                             print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
+                            log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
                         except Exception as e:
                             print(f"[-] Αναμονή download event: {e}")
+                            log_to_file(f"[-] Αναμονή download event: {e}")
 
                 except Exception as e:
                     print(f"[!] Σφάλμα κατά την πλοήγηση: {e}")
+                    log_to_file(f"[!] Σφάλμα κατά την πλοήγηση: {e}")
                 finally:
                     browser.close()
 
     except Exception as e:
         print(f"[!] Σφάλμα εκκίνησης Playwright: {e}")
+        log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}")
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
     if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
         direct_url = f"https://media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx"
         print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
+        log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
         try:
             req = urllib.request.Request(
                 direct_url,
@@ -137,8 +157,10 @@ def download_eurojackpot_draws(
                     save_path.write_bytes(data)
                     downloaded_file_path = save_path
                     print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
+                    log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
         except Exception as e:
             print(f"[-] Σφάλμα άμεσης λήψης: {e}")
+            log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}")
 
     return downloaded_file_path
 
@@ -163,8 +185,10 @@ def main():
 
     if result and os.path.exists(result):
         print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
+        log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
     else:
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
+        log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
 
 
 if __name__ == "__main__":
