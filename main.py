@@ -5,6 +5,8 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+import shutil
+from dotenv import load_dotenv
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -14,9 +16,13 @@ if hasattr(sys.stderr, "reconfigure"):
 from playwright.sync_api import sync_playwright
 
 URL = "https://www.allwyn.gr/el/eurojackpot/draws-results"
-TARGET_YEAR = "2026"
+TARGET_YEAR = str(datetime.now().year)
 OUTPUT_DIR = Path(__file__).parent / "downloads"
 LOG_FILE = Path(__file__).parent / "log.txt"
+
+load_dotenv()
+
+DEST_PATH = os.getenv("EUROJACKPOT_DEST_PATH")
 
 
 def log_to_file(message: str) -> None:
@@ -165,6 +171,33 @@ def download_eurojackpot_draws(
     return downloaded_file_path
 
 
+def copy_to_env_path(file_path: Path) -> Path | None:
+    """Αντιγράφει το κατεβασμένο αρχείο στο path που ορίζεται στο .env."""
+    if not DEST_PATH:
+        print("[!] Δεν έχει οριστεί το EUROJACKPOT_DEST_PATH στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_DEST_PATH στο .env")
+        return None
+
+    try:
+        destination_dir = Path(DEST_PATH)
+        destination_dir.mkdir(parents=True, exist_ok=True)
+
+        destination_file = destination_dir / file_path.name
+
+        shutil.copy2(file_path, destination_file)
+
+        print(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
+        log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
+
+        return destination_file
+
+    except Exception as e:
+        print(f"[-] Σφάλμα αντιγραφής αρχείου: {e}")
+        log_to_file(f"[-] Σφάλμα αντιγραφής αρχείου: {e}")
+        return None
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Eurojackpot από το allwyn.gr")
     parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων (προεπιλογή: 2026)")
@@ -186,6 +219,7 @@ def main():
     if result and os.path.exists(result):
         print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
         log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
+        copy_to_env_path(result)
     else:
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
         log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
