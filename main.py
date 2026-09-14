@@ -7,7 +7,6 @@ import urllib.request
 from pathlib import Path
 import shutil
 import platform
-import grp
 from dotenv import load_dotenv
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -210,8 +209,15 @@ def change_file_owner(file_path: Path) -> None:
         log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_OWNER στο .env")
         return
 
+    if not DEST_GROUP:
+        print("[!] Δεν έχει οριστεί το EUROJACKPOT_GROUP στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_GROUP στο .env")
+        return
+
     try:
         import pwd
+        import grp
+
         uid = pwd.getpwnam(DEST_OWNER).pw_uid
         gid = grp.getgrnam(DEST_GROUP).gr_gid
 
