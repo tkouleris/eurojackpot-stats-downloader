@@ -6,6 +6,7 @@ import time
 import urllib.request
 from pathlib import Path
 import shutil
+import platform
 from dotenv import load_dotenv
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -23,6 +24,7 @@ LOG_FILE = Path(__file__).parent / "log.txt"
 load_dotenv()
 
 DEST_PATH = os.getenv("EUROJACKPOT_DEST_PATH")
+DEST_OWNER = os.getenv("EUROJACKPOT_OWNER")
 
 
 def log_to_file(message: str) -> None:
@@ -196,7 +198,31 @@ def copy_to_env_path(file_path: Path) -> Path | None:
         log_to_file(f"[-] Σφάλμα αντιγραφής αρχείου: {e}")
         return None
 
+def change_file_owner(file_path: Path) -> None:
+    """Αλλάζει τον owner του αρχείου μόνο σε Linux."""
+    if platform.system() != "Linux":
+        return
 
+    if not DEST_OWNER:
+        print("[!] Δεν έχει οριστεί το EUROJACKPOT_OWNER στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_OWNER στο .env")
+        return
+
+    try:
+        import pwd
+        uid = pwd.getpwnam(DEST_OWNER).pw_uid
+
+        os.chown(file_path, uid, -1)
+
+        print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
+        log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
+
+    except KeyError:
+        print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
+        log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
+    except Exception as e:
+        print(f"[-] Σφάλμα αλλαγής owner: {e}")
+        log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Eurojackpot από το allwyn.gr")
@@ -219,7 +245,10 @@ def main():
     if result and os.path.exists(result):
         print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
         log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
-        copy_to_env_path(result)
+        destination_file = copy_to_env_path(result)
+
+        if destination_file:
+            change_file_owner(destination_file)
     else:
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
         log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
