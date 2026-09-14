@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 import shutil
 import platform
+import grp
 from dotenv import load_dotenv
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -25,6 +26,7 @@ load_dotenv()
 
 DEST_PATH = os.getenv("EUROJACKPOT_DEST_PATH")
 DEST_OWNER = os.getenv("EUROJACKPOT_OWNER")
+DEST_GROUP = os.getenv("EUROJACKPOT_GROUP")
 
 
 def log_to_file(message: str) -> None:
@@ -211,8 +213,9 @@ def change_file_owner(file_path: Path) -> None:
     try:
         import pwd
         uid = pwd.getpwnam(DEST_OWNER).pw_uid
+        gid = grp.getgrnam(DEST_GROUP).gr_gid
 
-        os.chown(file_path, uid, -1)
+        os.chown(file_path, uid, gid)
 
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
