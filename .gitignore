@@ -219,3 +219,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 log.txt
+log_eurojackpot.txt
+log_joker.txt
