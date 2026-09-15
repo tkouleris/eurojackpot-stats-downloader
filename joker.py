@@ -16,16 +16,16 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from playwright.sync_api import sync_playwright
 
-URL = "https://www.allwyn.gr/el/eurojackpot/draws-results"
+URL = "https://www.allwyn.gr/el/tzoker/draws-results"
 TARGET_YEAR = str(datetime.now().year)
 OUTPUT_DIR = Path(__file__).parent / "downloads"
-LOG_FILE = Path(__file__).parent / "log.txt"
+LOG_FILE = Path(__file__).parent / "log_joker.txt"
 
 load_dotenv()
 
-DEST_PATH = os.getenv("EUROJACKPOT_DEST_PATH")
-DEST_OWNER = os.getenv("EUROJACKPOT_OWNER")
-DEST_GROUP = os.getenv("EUROJACKPOT_GROUP")
+DEST_PATH = os.getenv("JOKER_DEST_PATH")
+DEST_OWNER = os.getenv("OWNER")
+DEST_GROUP = os.getenv("GROUP")
 
 
 def log_to_file(message: str) -> None:
@@ -35,19 +35,19 @@ def log_to_file(message: str) -> None:
         f.write(f"[{timestamp}] {clean_msg}\n")
 
 
-def download_eurojackpot_draws(
+def download_joker_draws(
     url: str = URL,
     year: str = TARGET_YEAR,
     output_dir: Path = OUTPUT_DIR,
     headless: bool = True
 ) -> Path | None:
     """
-    Επισκέπτεται τη σελίδα https://www.allwyn.gr/el/eurojackpot/draws-results
-    και κατεβάζει το αρχείο κληρώσεων Eurojackpot για το επιλεγμένο έτος (π.χ. 2026).
+    Επισκέπτεται τη σελίδα https://www.allwyn.gr/el/tzoker/draws-results
+    και κατεβάζει το αρχείο κληρώσεων Joker για το επιλεγμένο έτος (π.χ. 2026).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Eurojackpot για το έτος {year}...")
-    log_to_file(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Eurojackpot για το έτος {year}...")
+    print(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Joker για το έτος {year}...")
+    log_to_file(f"[*] Εκκίνηση διαδικασίας λήψης κληρώσεων Joker για το έτος {year}...")
     print(f"[*] Σελίδα στόχος: {url}")
     log_to_file(f"[*] Σελίδα στόχος: {url}")
 
@@ -148,28 +148,28 @@ def download_eurojackpot_draws(
         log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}")
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
-    if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
-        direct_url = f"https://media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx"
-        print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
-        log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
-        try:
-            req = urllib.request.Request(
-                direct_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-            )
-            save_path = output_dir / f"Eurojackpot_{year}.xlsx"
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                if resp.status == 200:
-                    data = resp.read()
-                    save_path.write_bytes(data)
-                    downloaded_file_path = save_path
-                    print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
-                    log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
-        except Exception as e:
-            print(f"[-] Σφάλμα άμεσης λήψης: {e}")
-            log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}")
+    # if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
+    #     direct_url = f"https://media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx"
+    #     print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
+    #     log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
+    #     try:
+    #         req = urllib.request.Request(
+    #             direct_url,
+    #             headers={
+    #                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    #             }
+    #         )
+    #         save_path = output_dir / f"Eurojackpot_{year}.xlsx"
+    #         with urllib.request.urlopen(req, timeout=15) as resp:
+    #             if resp.status == 200:
+    #                 data = resp.read()
+    #                 save_path.write_bytes(data)
+    #                 downloaded_file_path = save_path
+    #                 print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
+    #                 log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
+    #     except Exception as e:
+    #         print(f"[-] Σφάλμα άμεσης λήψης: {e}")
+    #         log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}")
 
     return downloaded_file_path
 
@@ -205,13 +205,13 @@ def change_file_owner(file_path: Path) -> None:
         return
 
     if not DEST_OWNER:
-        print("[!] Δεν έχει οριστεί το EUROJACKPOT_OWNER στο .env")
-        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_OWNER στο .env")
+        print("[!] Δεν έχει οριστεί το OWNER στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το OWNER στο .env")
         return
 
     if not DEST_GROUP:
-        print("[!] Δεν έχει οριστεί το EUROJACKPOT_GROUP στο .env")
-        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_GROUP στο .env")
+        print("[!] Δεν έχει οριστεί το GROUP στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το GROUP στο .env")
         return
 
     try:
@@ -234,8 +234,8 @@ def change_file_owner(file_path: Path) -> None:
         log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Eurojackpot από το allwyn.gr")
-    parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων (προεπιλογή: 2026)")
+    parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Joker από το allwyn.gr")
+    parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων ")
     parser.add_argument("--url", default=URL, help="Το URL της σελίδας αποτελεσμάτων")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR), help="Φάκελος αποθήκευσης του αρχείου")
     parser.add_argument("--headless", action="store_true", default=True, help="Εκτέλεση του browser σε headless mode")
@@ -244,7 +244,7 @@ def main():
     args = parser.parse_args()
 
     output_directory = Path(args.output_dir)
-    result = download_eurojackpot_draws(
+    result = download_joker_draws(
         url=args.url,
         year=args.year,
         output_dir=output_directory,
