@@ -30,13 +30,6 @@ DEST_OWNER = os.getenv("OWNER")
 DEST_GROUP = os.getenv("GROUP")
 
 
-# def log_to_file(message: str) -> None:
-#     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#     clean_msg = message.strip()
-#     with open(LOG_FILE, "a", encoding="utf-8") as f:
-#         f.write(f"[{timestamp}] {clean_msg}\n")
-
-
 def download_joker_draws(
     url: str = URL,
     year: str = TARGET_YEAR,
