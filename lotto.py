@@ -185,7 +185,7 @@ def copy_to_env_path(file_path: Path) -> Path | None:
         shutil.copy2(file_path, destination_file)
 
         print(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
-        log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
+        log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}", LOG_FILE)
 
         return destination_file
 
