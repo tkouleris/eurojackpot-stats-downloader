@@ -122,7 +122,7 @@ def download_joker_draws(
                             with page.expect_download(timeout=15000) as download_info:
                                 download_select.select_option(year)
                             download = download_info.value
-                            suggested_filename = download.suggested_filename or f"Eurojackpot_{year}.xlsx"
+                            suggested_filename = download.suggested_filename or f"Joker_{year}.xlsx"
                             save_path = output_dir / suggested_filename
                             download.save_as(save_path)
                             downloaded_file_path = save_path
@@ -143,28 +143,28 @@ def download_joker_draws(
         log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}", LOG_FILE)
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
-    # if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
-    #     direct_url = f"https://media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx"
-    #     print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
-    #     log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
-    #     try:
-    #         req = urllib.request.Request(
-    #             direct_url,
-    #             headers={
-    #                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    #             }
-    #         )
-    #         save_path = output_dir / f"Eurojackpot_{year}.xlsx"
-    #         with urllib.request.urlopen(req, timeout=15) as resp:
-    #             if resp.status == 200:
-    #                 data = resp.read()
-    #                 save_path.write_bytes(data)
-    #                 downloaded_file_path = save_path
-    #                 print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
-    #                 log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
-    #     except Exception as e:
-    #         print(f"[-] Σφάλμα άμεσης λήψης: {e}")
-    #         log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}")
+    if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
+        direct_url = f"https://media.opap.gr/Excel_xlsx/5104/Joker_{year}.xlsx"
+        print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
+        log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}", LOG_FILE)
+        try:
+            req = urllib.request.Request(
+                direct_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+            )
+            save_path = output_dir / f"Joker_{year}.xlsx"
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    data = resp.read()
+                    save_path.write_bytes(data)
+                    downloaded_file_path = save_path
+                    print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
+                    log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)", LOG_FILE)
+        except Exception as e:
+            print(f"[-] Σφάλμα άμεσης λήψης: {e}")
+            log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}", LOG_FILE)
 
     return downloaded_file_path
 
@@ -172,8 +172,8 @@ def download_joker_draws(
 def copy_to_env_path(file_path: Path) -> Path | None:
     """Αντιγράφει το κατεβασμένο αρχείο στο path που ορίζεται στο .env."""
     if not DEST_PATH:
-        print("[!] Δεν έχει οριστεί το EUROJACKPOT_DEST_PATH στο .env")
-        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_DEST_PATH στο .env", LOG_FILE)
+        print("[!] Δεν έχει οριστεί το JOKER_DEST_PATH στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το JOKER_DEST_PATH στο .env", LOG_FILE)
         return None
 
     try:
