@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 import shutil
 import platform
+import subprocess
 from dotenv import load_dotenv
 
 from helpers import log_to_file
@@ -26,6 +27,8 @@ LOG_FILE = Path(__file__).parent / "log_eurojackpot.txt"
 load_dotenv()
 
 DEST_PATH = os.getenv("EUROJACKPOT_DEST_PATH")
+CACHE_COMMAND = os.getenv("EUROJACKPOT_CACHE_COMMAND")
+MAIN_DEST_PATH = os.getenv("MAIN_DEST_PATH")
 DEST_OWNER = os.getenv("OWNER")
 DEST_GROUP = os.getenv("GROUP")
 
@@ -220,6 +223,15 @@ def change_file_owner(file_path: Path) -> None:
 
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}", LOG_FILE)
+
+        subprocess.run(
+            ["php", "artisan", CACHE_COMMAND],
+            cwd=MAIN_DEST_PATH,
+            capture_output=True,
+            text=True
+        )
+        print(f"[✓] Cache completed")
+        log_to_file(f"[✓] Cache completed", LOG_FILE)
 
     except KeyError:
         print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
