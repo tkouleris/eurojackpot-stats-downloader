@@ -221,6 +221,14 @@ def change_file_owner(file_path: Path) -> None:
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}", LOG_FILE)
 
+        import subprocess
+        subprocess.run(
+            ["php", "artisan", "app:cache-joker"],
+            cwd="/var/www/html/lottery-genie",
+            capture_output=True,
+            text=True
+        )
+        log_to_file(f"[✓] Cache completed", LOG_FILE)
     except KeyError:
         print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
         log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.", LOG_FILE)
