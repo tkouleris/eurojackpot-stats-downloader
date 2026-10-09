@@ -44,7 +44,7 @@ python main.py
 
 | Argument | Description | Default |
 |---|---|---|
-| `--year` | The target year of draw results to download | `2026` |
+| `--year` | The target year of draw results to download | Current year (plus the previous year during the first 7 days of January) |
 | `--output-dir` | Directory where downloaded files are saved | `./downloads` |
 | `--url` | The URL of the results page | `https://www.allwyn.gr/el/eurojackpot/draws-results` |
 | `--headless` | Run browser in headless mode (default) | `True` |
