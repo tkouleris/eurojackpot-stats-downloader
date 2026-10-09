@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 import platform
 import subprocess
+import io
+import zipfile
 from dotenv import load_dotenv
 
 from helpers import log_to_file
@@ -34,8 +36,8 @@ DEST_GROUP = os.getenv("GROUP")
 
 
 def is_valid_download(file_path: Path | None) -> bool:
-    """Ελέγχει ότι το αρχείο υπάρχει και δεν είναι κενό."""
-    return file_path is not None and file_path.exists() and file_path.stat().st_size > 0
+    """Ελέγχει ότι το αρχείο υπάρχει και είναι έγκυρο xlsx (zip) αρχείο."""
+    return file_path is not None and file_path.is_file() and zipfile.is_zipfile(file_path)
 
 
 def download_eurojackpot_draws(
@@ -133,9 +135,13 @@ def download_eurojackpot_draws(
                             suggested_filename = download.suggested_filename or f"Eurojackpot_{year}.xlsx"
                             save_path = output_dir / suggested_filename
                             download.save_as(save_path)
-                            downloaded_file_path = save_path
-                            print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
-                            log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            if is_valid_download(save_path):
+                                downloaded_file_path = save_path
+                                print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
+                                log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            else:
+                                print(f"[-] Το αρχείο του browser δεν είναι έγκυρο xlsx: {save_path}")
+                                log_to_file(f"[-] Το αρχείο του browser δεν είναι έγκυρο xlsx: {save_path}", LOG_FILE)
                         except Exception as e:
                             print(f"[-] Αναμονή download event: {e}")
                             log_to_file(f"[-] Αναμονή download event: {e}", LOG_FILE)
@@ -165,9 +171,9 @@ def download_eurojackpot_draws(
             save_path = output_dir / f"Eurojackpot_{year}.xlsx"
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = resp.read() if resp.status == 200 else b""
-                if not data:
-                    print("[-] Η άμεση λήψη επέστρεψε κενό περιεχόμενο.")
-                    log_to_file("[-] Η άμεση λήψη επέστρεψε κενό περιεχόμενο.", LOG_FILE)
+                if not zipfile.is_zipfile(io.BytesIO(data)):
+                    print("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.")
+                    log_to_file("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.", LOG_FILE)
                 else:
                     save_path.write_bytes(data)
                     downloaded_file_path = save_path
