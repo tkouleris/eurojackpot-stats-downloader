@@ -33,6 +33,11 @@ DEST_OWNER = os.getenv("OWNER")
 DEST_GROUP = os.getenv("GROUP")
 
 
+def is_valid_download(file_path: Path | None) -> bool:
+    """Ελέγχει ότι το αρχείο υπάρχει και δεν είναι κενό."""
+    return file_path is not None and file_path.exists() and file_path.stat().st_size > 0
+
+
 def download_eurojackpot_draws(
     url: str = URL,
     year: str = TARGET_YEAR,
@@ -146,7 +151,7 @@ def download_eurojackpot_draws(
         log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}", LOG_FILE)
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
-    if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
+    if not is_valid_download(downloaded_file_path):
         direct_url = f"https://media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx"
         print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
         log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}", LOG_FILE)
@@ -159,8 +164,11 @@ def download_eurojackpot_draws(
             )
             save_path = output_dir / f"Eurojackpot_{year}.xlsx"
             with urllib.request.urlopen(req, timeout=15) as resp:
-                if resp.status == 200:
-                    data = resp.read()
+                data = resp.read() if resp.status == 200 else b""
+                if not data:
+                    print("[-] Η άμεση λήψη επέστρεψε κενό περιεχόμενο.")
+                    log_to_file("[-] Η άμεση λήψη επέστρεψε κενό περιεχόμενο.", LOG_FILE)
+                else:
                     save_path.write_bytes(data)
                     downloaded_file_path = save_path
                     print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
@@ -168,6 +176,9 @@ def download_eurojackpot_draws(
         except Exception as e:
             print(f"[-] Σφάλμα άμεσης λήψης: {e}")
             log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}", LOG_FILE)
+
+    if not is_valid_download(downloaded_file_path):
+        return None
 
     return downloaded_file_path
 
@@ -258,7 +269,7 @@ def main():
         headless=args.headless
     )
 
-    if result and os.path.exists(result):
+    if is_valid_download(result):
         print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
         log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
         destination_file = copy_to_env_path(result)
