@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import platform
 import subprocess
+import shlex
 import io
 import zipfile
 from dotenv import load_dotenv
@@ -201,8 +202,15 @@ def copy_to_env_path(file_path: Path) -> Path | None:
         destination_dir.mkdir(parents=True, exist_ok=True)
 
         destination_file = destination_dir / file_path.name
+        temp_file = destination_dir / f".{file_path.name}.tmp"
 
-        shutil.copy2(file_path, destination_file)
+        # Αντιγραφή σε προσωρινό αρχείο και ατομική αντικατάσταση, ώστε ο
+        # προορισμός να μην μείνει ποτέ μισογραμμένος.
+        try:
+            shutil.copy2(file_path, temp_file)
+            os.replace(temp_file, destination_file)
+        finally:
+            temp_file.unlink(missing_ok=True)
 
         print(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
         log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}", LOG_FILE)
@@ -263,7 +271,7 @@ def refresh_cache() -> bool:
 
     try:
         result = subprocess.run(
-            ["php", "artisan", CACHE_COMMAND],
+            ["php", "artisan", *shlex.split(CACHE_COMMAND)],
             cwd=MAIN_DEST_PATH,
             capture_output=True,
             text=True,
@@ -288,7 +296,7 @@ def refresh_cache() -> bool:
     log_to_file(f"[✓] Cache completed: php artisan {CACHE_COMMAND}", LOG_FILE)
     return True
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Eurojackpot από το allwyn.gr")
     parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων (προεπιλογή: 2026)")
     parser.add_argument("--url", default=URL, help="Το URL της σελίδας αποτελεσμάτων")
@@ -306,18 +314,25 @@ def main():
         headless=args.headless
     )
 
-    if is_valid_download(result):
-        print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
-        log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
-        destination_file = copy_to_env_path(result)
-
-        if destination_file:
-            change_file_owner(destination_file)
-            refresh_cache()
-    else:
+    if not is_valid_download(result):
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
         log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.", LOG_FILE)
+        return 1
+
+    print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
+    log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
+
+    destination_file = copy_to_env_path(result)
+    if not destination_file:
+        return 1
+
+    change_file_owner(destination_file)
+
+    if not refresh_cache():
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
