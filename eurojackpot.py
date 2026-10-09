@@ -241,21 +241,52 @@ def change_file_owner(file_path: Path) -> None:
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}", LOG_FILE)
 
-        subprocess.run(
-            ["php", "artisan", CACHE_COMMAND],
-            cwd=MAIN_DEST_PATH,
-            capture_output=True,
-            text=True
-        )
-        print(f"[✓] Cache completed")
-        log_to_file(f"[✓] Cache completed", LOG_FILE)
-
     except KeyError:
         print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
         log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.", LOG_FILE)
     except Exception as e:
         print(f"[-] Σφάλμα αλλαγής owner: {e}")
         log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}", LOG_FILE)
+
+
+def refresh_cache() -> bool:
+    """Εκτελεί την εντολή artisan που ανανεώνει το cache της εφαρμογής."""
+    if not CACHE_COMMAND:
+        print("[!] Δεν έχει οριστεί το EUROJACKPOT_CACHE_COMMAND στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το EUROJACKPOT_CACHE_COMMAND στο .env", LOG_FILE)
+        return False
+
+    if not MAIN_DEST_PATH or not Path(MAIN_DEST_PATH).is_dir():
+        print(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}")
+        log_to_file(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}", LOG_FILE)
+        return False
+
+    try:
+        result = subprocess.run(
+            ["php", "artisan", CACHE_COMMAND],
+            cwd=MAIN_DEST_PATH,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+    except FileNotFoundError:
+        print("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.")
+        log_to_file("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.", LOG_FILE)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.")
+        log_to_file(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.", LOG_FILE)
+        return False
+
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout).strip()
+        print(f"[-] Αποτυχία cache (exit code {result.returncode}): {output}")
+        log_to_file(f"[-] Αποτυχία cache (exit code {result.returncode}): {output}", LOG_FILE)
+        return False
+
+    print(f"[✓] Cache completed: php artisan {CACHE_COMMAND}")
+    log_to_file(f"[✓] Cache completed: php artisan {CACHE_COMMAND}", LOG_FILE)
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Eurojackpot από το allwyn.gr")
@@ -282,6 +313,7 @@ def main():
 
         if destination_file:
             change_file_owner(destination_file)
+            refresh_cache()
     else:
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
         log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.", LOG_FILE)
