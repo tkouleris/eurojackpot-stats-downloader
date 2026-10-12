@@ -225,6 +225,9 @@ def download_joker_draws(
             print(f"[-] Σφάλμα άμεσης λήψης: {e}")
             log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}", LOG_FILE)
 
+    if not is_valid_download(downloaded_file_path):
+        return None
+
     return downloaded_file_path
 
 
