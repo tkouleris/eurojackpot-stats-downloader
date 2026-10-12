@@ -240,7 +240,16 @@ def change_file_owner(file_path: Path) -> None:
 
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}", LOG_FILE)
+    except KeyError:
+        print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
+        log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.", LOG_FILE)
+    except Exception as e:
+        print(f"[-] Σφάλμα αλλαγής owner: {e}")
+        log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}", LOG_FILE)
 
+def refresh_cache() -> None:
+    """Εκτελεί την εντολή artisan που ανανεώνει το cache της εφαρμογής, σε κάθε λειτουργικό."""
+    try:
         subprocess.run(
             ["php", "artisan", CACHE_COMMAND],
             cwd=MAIN_DEST_PATH,
@@ -249,12 +258,9 @@ def change_file_owner(file_path: Path) -> None:
         )
         print(f"[✓] Cache completed")
         log_to_file(f"[✓] Cache completed", LOG_FILE)
-    except KeyError:
-        print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
-        log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.", LOG_FILE)
     except Exception as e:
-        print(f"[-] Σφάλμα αλλαγής owner: {e}")
-        log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}", LOG_FILE)
+        print(f"[-] Σφάλμα ανανέωσης cache: {e}")
+        log_to_file(f"[-] Σφάλμα ανανέωσης cache: {e}", LOG_FILE)
 
 def main():
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Joker από το allwyn.gr")
@@ -281,6 +287,7 @@ def main():
 
         if destination_file:
             change_file_owner(destination_file)
+            refresh_cache()
     else:
         print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
         log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.", LOG_FILE)
