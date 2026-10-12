@@ -55,6 +55,13 @@ diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
 
 - Commits use conventional commits with the game as scope: `fix(joker): ...`, `fix(eurojackpot): ...`, `docs: ...`. One commit per logical change and per script.
 - `core.autocrlf=true`: files are checked out with CRLF line endings.
+- Every `print` is paired with a `log_to_file` call carrying the same text. Message prefixes: `[*]` progress, `[✓]` success, `[-]` a step failed, `[!]` configuration problem or serious error.
+- `log_to_file(message, log_file)` has no default for `log_file`. Always pass the module's `LOG_FILE`; forgetting it is an easy mistake when copying code between scripts (see the `lotto.py` bugs below).
+
+## Debugging
+
+- **Start with the logs.** `log_<game>.txt` holds the full history of runs, one timestamped line per message. The files are append-only and never rotated.
+- **The browser step depends on allwyn.gr's HTML.** If it breaks, run with `--no-headless` to watch the page. The direct-download fallback hides browser failures, so a successful run doesn't mean the browser step worked; the log says which source the file came from ("μέσω του browser" vs "λήφθηκε επιτυχώς").
 
 ## Pipeline (per script)
 
@@ -77,3 +84,10 @@ The scripts are copy-pasted rather than sharing code. Recent fixes went into `eu
 - **Rolls over the year:** `years_to_download` also re-fetches the previous year during the first `NEW_YEAR_GRACE_DAYS` of January. The new year is optional during that window, because its file doesn't exist before the first draw.
 - **Refreshes the cache separately** (`refresh_cache`) instead of inside `change_file_owner`. As a result it runs on every OS, splits the command with `shlex`, validates `MAIN_DEST_PATH` and checks the return code. In `lotto.py`, the artisan call sits inside the Linux-only chown function, so it is skipped on other platforms.
 - **Returns a non-zero exit code** from `main()` when a required year fails or the cache refresh fails. `lotto.py` always exits 0.
+
+Other differences in `lotto.py`:
+
+- It also looks for `select.archive`, and its fallback picks `candidates.last` instead of `candidates.nth(1)`.
+- **Known bugs:** two `log_to_file` calls omit the `LOG_FILE` argument, so they raise `TypeError`:
+  - `lotto.py:104` (cookie banner): the error is swallowed by `except Exception: pass`, so `btn.click()` never runs and the cookie banner is never accepted.
+  - `lotto.py:170` (direct-download `except`): the error is raised inside the `except` itself, so any direct-download failure crashes the script.
