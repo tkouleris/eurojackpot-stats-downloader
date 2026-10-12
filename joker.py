@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+from datetime import date, datetime
 import io
 import os
 import sys
@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import platform
 import subprocess
+import shlex
 import zipfile
 from dotenv import load_dotenv
 
@@ -25,6 +26,8 @@ URL = "https://www.allwyn.gr/el/tzoker/draws-results"
 TARGET_YEAR = str(datetime.now().year)
 OUTPUT_DIR = Path(__file__).parent / "downloads"
 LOG_FILE = Path(__file__).parent / "log_joker.txt"
+# Πόσες μέρες μετά την αλλαγή του έτους ξανακατεβαίνει και το προηγούμενο έτος.
+NEW_YEAR_GRACE_DAYS = 7
 
 load_dotenv()
 
@@ -43,6 +46,29 @@ def is_valid_download(file_path: Path | None) -> bool:
 def target_filename(year: str) -> str:
     """Σταθερό όνομα αρχείου που περιμένει η εφαρμογή, ανεξάρτητα από την πηγή λήψης."""
     return f"Joker_{year}.xlsx"
+
+
+def years_to_download(today: date) -> list[tuple[str, bool]]:
+    """
+    Επιστρέφει τα έτη προς λήψη ως ζεύγη (έτος, υποχρεωτικό).
+
+    Τις πρώτες μέρες του Ιανουαρίου κατεβαίνει ξανά το προηγούμενο έτος, ώστε να
+    περαστούν οι κληρώσεις των τελευταίων ημερών του Δεκεμβρίου. Το νέο έτος είναι
+    τότε προαιρετικό, αφού το αρχείο του δεν υπάρχει πριν από την πρώτη κλήρωση.
+    """
+    current = str(today.year)
+    if today.month == 1 and today.day <= NEW_YEAR_GRACE_DAYS:
+        return [(str(today.year - 1), True), (current, False)]
+    return [(current, True)]
+
+
+def is_visible_within(locator, timeout: int) -> bool:
+    """Περιμένει έως `timeout` ms να γίνει ορατό το στοιχείο (το is_visible δεν περιμένει)."""
+    try:
+        locator.wait_for(state="visible", timeout=timeout)
+        return True
+    except Exception:
+        return False
 
 
 def is_option_selected(select, value: str) -> bool:
@@ -117,21 +143,19 @@ def download_joker_draws(
                         "button:has-text('Accept all')",
                         "#onetrust-accept-btn-handler"
                     ]
-                    for selector in cookie_buttons:
+                    btn = page.locator(", ".join(cookie_buttons)).first
+                    if is_visible_within(btn, 5000):
                         try:
-                            btn = page.locator(selector).first
-                            if btn.is_visible(timeout=1500):
-                                print("[*] Αποδοχή cookies...")
-                                log_to_file("[*] Αποδοχή cookies...", LOG_FILE)
-                                btn.click()
-                                time.sleep(1)
-                                break
+                            print("[*] Αποδοχή cookies...")
+                            log_to_file("[*] Αποδοχή cookies...", LOG_FILE)
+                            btn.click()
+                            time.sleep(1)
                         except Exception:
                             pass
 
                     # Εντοπισμός του dropdown επιλογής έτους στο πεδίο «Αρχείο Αποτελεσμάτων» (.download select)
                     download_select = page.locator(".download select, div.download select").first
-                    if not download_select.is_visible(timeout=2000):
+                    if not is_visible_within(download_select, 10000):
                         # Εναλλακτικός εντοπισμός επιλογέα έτους
                         candidates = page.locator("select[aria-label='Έτος']")
                         if candidates.count() > 1:
@@ -216,8 +240,15 @@ def copy_to_env_path(file_path: Path) -> Path | None:
         destination_dir.mkdir(parents=True, exist_ok=True)
 
         destination_file = destination_dir / file_path.name
+        temp_file = destination_dir / f".{file_path.name}.tmp"
 
-        shutil.copy2(file_path, destination_file)
+        # Αντιγραφή σε προσωρινό αρχείο και ατομική αντικατάσταση, ώστε ο
+        # προορισμός να μην μείνει ποτέ μισογραμμένος.
+        try:
+            shutil.copy2(file_path, temp_file)
+            os.replace(temp_file, destination_file)
+        finally:
+            temp_file.unlink(missing_ok=True)
 
         print(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
         log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}", LOG_FILE)
@@ -262,24 +293,71 @@ def change_file_owner(file_path: Path) -> None:
         print(f"[-] Σφάλμα αλλαγής owner: {e}")
         log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}", LOG_FILE)
 
-def refresh_cache() -> None:
+def refresh_cache() -> bool:
     """Εκτελεί την εντολή artisan που ανανεώνει το cache της εφαρμογής, σε κάθε λειτουργικό."""
+    if not CACHE_COMMAND:
+        print("[!] Δεν έχει οριστεί το JOKER_CACHE_COMMAND στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το JOKER_CACHE_COMMAND στο .env", LOG_FILE)
+        return False
+
+    if not MAIN_DEST_PATH or not Path(MAIN_DEST_PATH).is_dir():
+        print(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}")
+        log_to_file(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}", LOG_FILE)
+        return False
+
     try:
-        subprocess.run(
-            ["php", "artisan", CACHE_COMMAND],
+        result = subprocess.run(
+            ["php", "artisan", *shlex.split(CACHE_COMMAND)],
             cwd=MAIN_DEST_PATH,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=300
         )
-        print(f"[✓] Cache completed")
-        log_to_file(f"[✓] Cache completed", LOG_FILE)
-    except Exception as e:
-        print(f"[-] Σφάλμα ανανέωσης cache: {e}")
-        log_to_file(f"[-] Σφάλμα ανανέωσης cache: {e}", LOG_FILE)
+    except FileNotFoundError:
+        print("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.")
+        log_to_file("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.", LOG_FILE)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.")
+        log_to_file(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.", LOG_FILE)
+        return False
 
-def main():
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout).strip()
+        print(f"[-] Αποτυχία cache (exit code {result.returncode}): {output}")
+        log_to_file(f"[-] Αποτυχία cache (exit code {result.returncode}): {output}", LOG_FILE)
+        return False
+
+    print(f"[✓] Cache completed: php artisan {CACHE_COMMAND}")
+    log_to_file(f"[✓] Cache completed: php artisan {CACHE_COMMAND}", LOG_FILE)
+    return True
+
+def download_and_install(year: str, url: str, output_dir: Path, headless: bool) -> Path | None:
+    """Κατεβάζει το αρχείο ενός έτους και το εγκαθιστά στο JOKER_DEST_PATH."""
+    result = download_joker_draws(
+        url=url,
+        year=year,
+        output_dir=output_dir,
+        headless=headless
+    )
+
+    if not is_valid_download(result):
+        print(f"\n[!] Δεν ήταν δυνατή η λήψη του αρχείου για το έτος {year}.")
+        log_to_file(f"[!] Δεν ήταν δυνατή η λήψη του αρχείου για το έτος {year}.", LOG_FILE)
+        return None
+
+    print(f"\n[✓] Η λήψη ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
+    log_to_file(f"[✓] Η λήψη ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
+
+    destination_file = copy_to_env_path(result)
+    if destination_file:
+        change_file_owner(destination_file)
+    return destination_file
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Joker από το allwyn.gr")
-    parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων ")
+    parser.add_argument("--year", help="Το έτος των κληρώσεων (προεπιλογή: τρέχον έτος, και το προηγούμενο τις πρώτες μέρες του Ιανουαρίου)")
     parser.add_argument("--url", default=URL, help="Το URL της σελίδας αποτελεσμάτων")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR), help="Φάκελος αποθήκευσης του αρχείου")
     parser.add_argument("--headless", action="store_true", default=True, help="Εκτέλεση του browser σε headless mode")
@@ -287,26 +365,25 @@ def main():
 
     args = parser.parse_args()
 
+    years = [(args.year, True)] if args.year else years_to_download(date.today())
     output_directory = Path(args.output_dir)
-    result = download_joker_draws(
-        url=args.url,
-        year=args.year,
-        output_dir=output_directory,
-        headless=args.headless
-    )
 
-    if result and os.path.exists(result):
-        print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
-        log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
-        destination_file = copy_to_env_path(result)
+    failed = False
+    installed_any = False
+    for year, required in years:
+        if download_and_install(year, args.url, output_directory, args.headless):
+            installed_any = True
+        elif required:
+            failed = True
+        else:
+            print(f"[*] Το αρχείο του {year} δεν είναι ακόμη διαθέσιμο (αναμενόμενο στις αρχές του έτους).")
+            log_to_file(f"[*] Το αρχείο του {year} δεν είναι ακόμη διαθέσιμο (αναμενόμενο στις αρχές του έτους).", LOG_FILE)
 
-        if destination_file:
-            change_file_owner(destination_file)
-            refresh_cache()
-    else:
-        print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
-        log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.", LOG_FILE)
+    if installed_any and not refresh_cache():
+        failed = True
+
+    return 1 if failed or not installed_any else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
