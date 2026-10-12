@@ -27,9 +27,34 @@ python eurojackpot.py --year 2025 --no-headless
 python joker.py --year 2026 --output-dir ./custom_folder
 ```
 
-Shared CLI flags: `--year`, `--url`, `--output-dir` (default `./downloads`), `--headless` / `--no-headless`.
+Shared CLI flags: `--year`, `--url`, `--output-dir`, `--headless` / `--no-headless`.
+
+The default output directory and the log files are resolved relative to the script (`Path(__file__).parent / "downloads"`), not the current working directory, so the scripts behave the same when run from cron.
+
+The code needs Python 3.10+ (it uses `Path | None`). A local virtualenv lives in `.venv` (`.venv/Scripts/python` on Windows).
+
+`requirements.txt` lists more than the scripts use. Only `playwright` and `python-dotenv` are imported; `pandas`, `numpy`, `openpyxl`, `beautifulsoup4` and `requests` are unused.
+
+## Testing changes
 
 There are no tests, linter config or build step.
+
+**Running a script has side effects on the real app.** With the local `.env`, a run copies the file into `<GAME>_DEST_PATH` and runs `php artisan` in the Laravel app. To test only the download, leave `<GAME>_DEST_PATH` empty (the run then ends with exit code 1 after downloading) or point it at a scratch folder.
+
+Cheap checks without running anything:
+
+```bash
+python -c "import ast; ast.parse(open('joker.py', encoding='utf-8').read())"   # syntax check
+
+# Compare two scripts after normalising game names, to spot logic that has diverged
+diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
+     <(sed 's/[Ee]urojackpot\|EUROJACKPOT\|5149/X/g' eurojackpot.py)
+```
+
+## Conventions
+
+- Commits use conventional commits with the game as scope: `fix(joker): ...`, `fix(eurojackpot): ...`, `docs: ...`. One commit per logical change and per script.
+- `core.autocrlf=true`: files are checked out with CRLF line endings.
 
 ## Pipeline (per script)
 
