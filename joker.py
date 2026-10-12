@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+import io
 import os
 import sys
 import time
@@ -8,6 +9,7 @@ from pathlib import Path
 import shutil
 import platform
 import subprocess
+import zipfile
 from dotenv import load_dotenv
 
 from helpers import log_to_file
@@ -32,6 +34,15 @@ MAIN_DEST_PATH = os.getenv("MAIN_DEST_PATH")
 DEST_OWNER = os.getenv("OWNER")
 DEST_GROUP = os.getenv("GROUP")
 
+
+def is_valid_download(file_path: Path | None) -> bool:
+    """Ελέγχει ότι το αρχείο υπάρχει και είναι έγκυρο xlsx (zip) αρχείο."""
+    return file_path is not None and file_path.is_file() and zipfile.is_zipfile(file_path)
+
+
+def target_filename(year: str) -> str:
+    """Σταθερό όνομα αρχείου που περιμένει η εφαρμογή, ανεξάρτητα από την πηγή λήψης."""
+    return f"Joker_{year}.xlsx"
 
 def download_joker_draws(
     url: str = URL,
@@ -125,12 +136,15 @@ def download_joker_draws(
                             with page.expect_download(timeout=15000) as download_info:
                                 download_select.select_option(year)
                             download = download_info.value
-                            suggested_filename = download.suggested_filename or f"Joker_{year}.xlsx"
-                            save_path = output_dir / suggested_filename
+                            save_path = output_dir / target_filename(year)
                             download.save_as(save_path)
-                            downloaded_file_path = save_path
-                            print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
-                            log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            if is_valid_download(save_path):
+                                downloaded_file_path = save_path
+                                print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
+                                log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            else:
+                                print(f"[-] Το αρχείο του browser δεν είναι έγκυρο xlsx: {save_path}")
+                                log_to_file(f"[-] Το αρχείο του browser δεν είναι έγκυρο xlsx: {save_path}", LOG_FILE)
                         except Exception as e:
                             print(f"[-] Αναμονή download event: {e}")
                             log_to_file(f"[-] Αναμονή download event: {e}", LOG_FILE)
@@ -146,8 +160,8 @@ def download_joker_draws(
         log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}", LOG_FILE)
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
-    if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
-        direct_url = f"https://media.opap.gr/Excel_xlsx/5104/Joker_{year}.xlsx"
+    if not is_valid_download(downloaded_file_path):
+        direct_url = f"https://media.opap.gr/Excel_xlsx/5104/{target_filename(year)}"
         print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
         log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}", LOG_FILE)
         try:
@@ -157,10 +171,13 @@ def download_joker_draws(
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
             )
-            save_path = output_dir / f"Joker_{year}.xlsx"
+            save_path = output_dir / target_filename(year)
             with urllib.request.urlopen(req, timeout=15) as resp:
-                if resp.status == 200:
-                    data = resp.read()
+                data = resp.read() if resp.status == 200 else b""
+                if not zipfile.is_zipfile(io.BytesIO(data)):
+                    print("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.")
+                    log_to_file("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.", LOG_FILE)
+                else:
                     save_path.write_bytes(data)
                     downloaded_file_path = save_path
                     print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
