@@ -41,14 +41,14 @@ There are no tests, linter config or build step.
 
 Configuration comes from `.env` (see `.env.example`), loaded via `python-dotenv` at import time into module-level constants.
 
-## The scripts have diverged: `eurojackpot.py` is the hardened reference
+## The scripts have diverged: `eurojackpot.py` and `joker.py` are hardened, `lotto.py` is not
 
-The scripts are copy-pasted rather than sharing code. Recent fixes went into `eurojackpot.py` only. `joker.py` and `lotto.py` still have the older behaviour. When fixing something in one script, check whether the same fix applies to the others. Things only `eurojackpot.py` does:
+The scripts are copy-pasted rather than sharing code. Recent fixes went into `eurojackpot.py` and were then ported to `joker.py`, so the two now have the same logic. `lotto.py` still has the older behaviour. When fixing something in one script, check whether the same fix applies to the others. Things `eurojackpot.py` and `joker.py` do but `lotto.py` doesn't:
 
 - **Validates downloads as xlsx** with `zipfile.is_zipfile`, for both the browser and the direct download. This stops empty files or HTML error pages from overwriting the destination.
 - **Uses a fixed output filename** (`target_filename(year)`) instead of Playwright's `suggested_filename`.
 - **Copies atomically:** writes to a temp file, then `os.replace`.
 - **Handles an already-selected year:** if the target year is already selected in the dropdown, it dispatches a `change` event explicitly, because `select_option` would not fire one.
 - **Rolls over the year:** `years_to_download` also re-fetches the previous year during the first `NEW_YEAR_GRACE_DAYS` of January. The new year is optional during that window, because its file doesn't exist before the first draw.
-- **Refreshes the cache separately** (`refresh_cache`) instead of inside `change_file_owner`. As a result it runs on every OS, splits the command with `shlex`, validates `MAIN_DEST_PATH` and checks the return code. In `joker.py`/`lotto.py`, the artisan call sits inside the Linux-only chown function, so it is skipped on other platforms.
-- **Returns a non-zero exit code** from `main()` when a required year fails or the cache refresh fails. The other scripts always exit 0.
+- **Refreshes the cache separately** (`refresh_cache`) instead of inside `change_file_owner`. As a result it runs on every OS, splits the command with `shlex`, validates `MAIN_DEST_PATH` and checks the return code. In `lotto.py`, the artisan call sits inside the Linux-only chown function, so it is skipped on other platforms.
+- **Returns a non-zero exit code** from `main()` when a required year fails or the cache refresh fails. `lotto.py` always exits 0.
