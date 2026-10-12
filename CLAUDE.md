@@ -12,7 +12,7 @@ Three standalone Python scripts that download yearly draw-result spreadsheets (`
 | `joker.py` | Joker (Tzoker) | `/el/tzoker/draws-results` | `.../5104/Joker_{year}.xlsx` | `JOKER_` | `log_joker.txt` |
 | `lotto.py` | Lotto | `/el/lotto/draws-results` | `.../5103/Lotto_{year}.xlsx` | `LOTTO_` | `log_lotto.txt` |
 
-`helpers.py` only holds `log_to_file(message, log_file)`. User-facing messages, comments and docstrings are written in Greek. Keep that convention.
+`helpers.py` only holds `log_to_file(message, log_file)`. Comments, docstrings, prints, log messages and CLI help are written in English in `eurojackpot.py` and `joker.py`; `lotto.py` still has them in Greek. Greek text that matches the site (cookie button labels, `aria-label='Έτος'`) must stay Greek.
 
 The README is out of date. It refers to `main.py`, which doesn't exist, and to `log.txt`. Run the individual scripts instead.
 
@@ -61,7 +61,7 @@ diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
 ## Debugging
 
 - **Start with the logs.** `log_<game>.txt` holds the full history of runs, one timestamped line per message. The files are append-only and never rotated.
-- **The browser step depends on allwyn.gr's HTML.** If it breaks, run with `--no-headless` to watch the page. The direct-download fallback hides browser failures, so a successful run doesn't mean the browser step worked; the log says which source the file came from ("μέσω του browser" vs "λήφθηκε επιτυχώς").
+- **The browser step depends on allwyn.gr's HTML.** If it breaks, run with `--no-headless` to watch the page. The direct-download fallback hides browser failures, so a successful run doesn't mean the browser step worked; the log says which source the file came from ("File downloaded via the browser" vs "File downloaded directly"; older log lines and `lotto.py` use the Greek "μέσω του browser" vs "λήφθηκε επιτυχώς").
 
 ## Pipeline (per script)
 
