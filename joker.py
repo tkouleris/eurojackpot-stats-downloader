@@ -44,6 +44,16 @@ def target_filename(year: str) -> str:
     """Σταθερό όνομα αρχείου που περιμένει η εφαρμογή, ανεξάρτητα από την πηγή λήψης."""
     return f"Joker_{year}.xlsx"
 
+
+def is_option_selected(select, value: str) -> bool:
+    """Ελέγχει αν η επιλεγμένη option του select έχει αυτή την τιμή ή ετικέτα."""
+    return select.evaluate(
+        "(s, v) => { const o = s.options[s.selectedIndex];"
+        " return !!o && (o.value === v || o.label.trim() === v); }",
+        value,
+    )
+
+
 def download_joker_draws(
     url: str = URL,
     year: str = TARGET_YEAR,
@@ -134,7 +144,12 @@ def download_joker_draws(
                         log_to_file(f"[*] Επιλογή έτους {year} στο τμήμα «Αρχείο Αποτελεσμάτων»...", LOG_FILE)
                         try:
                             with page.expect_download(timeout=15000) as download_info:
-                                download_select.select_option(year)
+                                if is_option_selected(download_select, year):
+                                    # Το έτος είναι ήδη επιλεγμένο, οπότε το select_option δεν
+                                    # θα προκαλούσε change event· το στέλνουμε ρητά.
+                                    download_select.dispatch_event("change")
+                                else:
+                                    download_select.select_option(year)
                             download = download_info.value
                             save_path = output_dir / target_filename(year)
                             download.save_as(save_path)
