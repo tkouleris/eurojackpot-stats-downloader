@@ -25,6 +25,7 @@ playwright install chromium          # only if no Edge/Chrome is installed
 python eurojackpot.py                # current year (plus previous year during Jan 1–7)
 python eurojackpot.py --year 2025 --no-headless
 python joker.py --year 2026 --output-dir ./custom_folder
+python lotto.py
 ```
 
 Shared CLI flags: `--year`, `--url`, `--output-dir`, `--headless` / `--no-headless`.
@@ -65,26 +66,33 @@ diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
 
 ## Pipeline (per script)
 
-1. **Browser download (Playwright, sync API).** Tries the Chromium channels `msedge` → `chrome` → bundled chromium. It accepts the cookie banner, then finds the year `<select>` in the "Αρχείο Αποτελεσμάτων" section (`.download select`, falling back to `select[aria-label='Έτος']`; lotto also tries `select.archive`). Selecting the year triggers the download.
+`main()` builds the list of years with `years_to_download(date.today())`: the current year, plus the previous year during the first `NEW_YEAR_GRACE_DAYS` (7) of January, when the previous year is required and the new year is optional (its file doesn't exist before the first draw). An explicit `--year` downloads only that year, as required. For each year, `download_and_install` runs steps 1–4:
+
+1. **Browser download (Playwright, sync API).** Tries the Chromium channels `msedge` → `chrome` → bundled chromium. It accepts the cookie banner, then finds the year `<select>` in the "Αρχείο Αποτελεσμάτων" section (`.download select`, falling back to `select[aria-label='Έτος']`; lotto also tries `select.archive`). Selecting the year triggers the download. If the year is already selected, `select_option` would not fire a `change` event, so the script dispatches one explicitly (`is_option_selected`).
 2. **Fallback.** If the browser step fails, the script fetches the file directly from `media.opap.gr` with `urllib`.
-3. **Install.** Copies the file to `<GAME>_DEST_PATH`.
+3. **Install.** Copies the file to `<GAME>_DEST_PATH` atomically (temp file, then `os.replace`).
 4. **Linux only.** `chown`s the file to `OWNER:GROUP` from `.env`.
-5. **Cache refresh.** Runs `php artisan <GAME>_CACHE_COMMAND` with `cwd=MAIN_DEST_PATH`.
+5. **Cache refresh.** After all years, if at least one file was installed, `refresh_cache` runs `php artisan <GAME>_CACHE_COMMAND` once, with `cwd=MAIN_DEST_PATH`, on every OS. The command is split with `shlex`, `MAIN_DEST_PATH` must be an existing directory, and a non-zero return code counts as failure.
+
+Every downloaded file is checked with `is_valid_download` (`zipfile.is_zipfile`), so empty files or HTML error pages never overwrite the destination. Files are always saved as `target_filename(year)`, never as Playwright's `suggested_filename`, because the app expects a fixed name.
+
+**Exit code:** `main()` returns 1 when a required year fails (download or install, including an empty `<GAME>_DEST_PATH`), when the cache refresh fails, or when nothing was installed. Otherwise it returns 0.
 
 Configuration comes from `.env` (see `.env.example`), loaded via `python-dotenv` at import time into module-level constants.
 
-## The scripts have diverged: `eurojackpot.py` and `joker.py` are hardened, `lotto.py` is not
+## The scripts are copy-pasted, not shared
 
-The scripts are copy-pasted rather than sharing code. Recent fixes went into `eurojackpot.py` and were then ported to `joker.py`, so the two now have the same logic. `lotto.py` still has the older behaviour. When fixing something in one script, check whether the same fix applies to the others. Things `eurojackpot.py` and `joker.py` do but `lotto.py` doesn't:
+There is no shared module besides `helpers.py`. Fixes went into `eurojackpot.py` first and were then ported to `joker.py` and `lotto.py`, so the pipeline above is the same in all three. When fixing something in one script, apply the same fix to the others. Use the `diff` command from "Testing changes" to check.
 
-- **Validates downloads as xlsx** with `zipfile.is_zipfile`, for both the browser and the direct download. This stops empty files or HTML error pages from overwriting the destination.
-- **Uses a fixed output filename** (`target_filename(year)`) instead of Playwright's `suggested_filename`.
-- **Copies atomically:** writes to a temp file, then `os.replace`.
-- **Handles an already-selected year:** if the target year is already selected in the dropdown, it dispatches a `change` event explicitly, because `select_option` would not fire one.
-- **Rolls over the year:** `years_to_download` also re-fetches the previous year during the first `NEW_YEAR_GRACE_DAYS` of January. The new year is optional during that window, because its file doesn't exist before the first draw.
-- **Refreshes the cache separately** (`refresh_cache`) instead of inside `change_file_owner`. As a result it runs on every OS, splits the command with `shlex`, validates `MAIN_DEST_PATH` and checks the return code. In `lotto.py`, the artisan call sits inside the Linux-only chown function, so it is skipped on other platforms.
-- **Returns a non-zero exit code** from `main()` when a required year fails or the cache refresh fails. `lotto.py` always exits 0.
+Remaining differences in `lotto.py` (browser step only):
 
-Other differences in `lotto.py`:
+- **Fallback selector:** it also looks for `select.archive`, and its fallback picks `candidates.last` instead of `candidates.nth(1)`.
+- **No `is_visible_within`:** Playwright's `locator.is_visible(timeout=...)` ignores the timeout and returns immediately. `eurojackpot.py` and `joker.py` therefore wait with `wait_for(state="visible")` (5 s for the cookie banner, 10 s for the dropdown). `lotto.py` still calls `is_visible(timeout=...)` and checks the cookie selectors one by one, so on a slow page it can miss the banner or skip to the fallback selector.
+- Messages, comments and CLI help are in Greek.
 
-- It also looks for `select.archive`, and its fallback picks `candidates.last` instead of `candidates.nth(1)`.
+## Known open issues (all three scripts)
+
+- `change_file_owner` catches `KeyError` from both `pwd.getpwnam` and `grp.getgrnam`, but always reports that the *user* doesn't exist, even when the group is missing.
+- When no year dropdown is found, the browser step falls through to the direct download without logging why.
+- `browser.new_context()` / `new_page()` sit outside the `try/finally` that closes the browser (`sync_playwright` still closes it on exit).
+- Waits are fixed `time.sleep` calls after page load and after the cookie click.
