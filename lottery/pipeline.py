@@ -65,7 +65,10 @@ def download(game: GameConfig, year: str, output_dir: Path, sources: Sequence[So
     """Tries the sources in order and returns the first valid file."""
     log.info(f"[*] Starting download of {game.name} draws for year {year}...")
     log.info(f"[*] Target page: {game.page_url}")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise DownloadError(f"Cannot create the output directory {output_dir}: {e}") from e
     for source in sources:
         try:
             return source(game, year, output_dir)
