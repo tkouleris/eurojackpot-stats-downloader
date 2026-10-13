@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+from datetime import date, datetime
 import os
 import sys
 import time
@@ -8,6 +8,9 @@ from pathlib import Path
 import shutil
 import platform
 import subprocess
+import shlex
+import io
+import zipfile
 from dotenv import load_dotenv
 
 from helpers import log_to_file
@@ -23,6 +26,8 @@ URL = "https://www.allwyn.gr/el/lotto/draws-results"
 TARGET_YEAR = str(datetime.now().year)
 OUTPUT_DIR = Path(__file__).parent / "downloads"
 LOG_FILE = Path(__file__).parent / "log_lotto.txt"
+# Πόσες μέρες μέσα στη νέα χρονιά ξανακατεβαίνει η προηγούμενη χρονιά.
+NEW_YEAR_GRACE_DAYS = 7
 
 load_dotenv()
 
@@ -31,6 +36,39 @@ CACHE_COMMAND = os.getenv("LOTTO_CACHE_COMMAND")
 MAIN_DEST_PATH = os.getenv("MAIN_DEST_PATH")
 DEST_OWNER = os.getenv("OWNER")
 DEST_GROUP = os.getenv("GROUP")
+
+
+def is_valid_download(file_path: Path | None) -> bool:
+    """Ελέγχει ότι το αρχείο υπάρχει και είναι έγκυρο xlsx (zip)."""
+    return file_path is not None and file_path.is_file() and zipfile.is_zipfile(file_path)
+
+
+def target_filename(year: str) -> str:
+    """Σταθερό όνομα αρχείου που περιμένει η εφαρμογή, ανεξάρτητα από την πηγή λήψης."""
+    return f"lotto_{year}.xlsx"
+
+
+def years_to_download(today: date) -> list[tuple[str, bool]]:
+    """
+    Επιστρέφει τα έτη προς λήψη ως ζεύγη (έτος, υποχρεωτικό).
+
+    Τις πρώτες μέρες του Ιανουαρίου ξανακατεβαίνει η προηγούμενη χρονιά, ώστε να
+    περιληφθούν οι κληρώσεις των τελευταίων ημερών του Δεκεμβρίου. Η νέα χρονιά είναι
+    τότε προαιρετική, γιατί το αρχείο της δεν υπάρχει πριν από την πρώτη κλήρωση.
+    """
+    current = str(today.year)
+    if today.month == 1 and today.day <= NEW_YEAR_GRACE_DAYS:
+        return [(str(today.year - 1), True), (current, False)]
+    return [(current, True)]
+
+
+def is_option_selected(select, value: str) -> bool:
+    """Ελέγχει αν η επιλεγμένη option του select έχει αυτό το value ή label."""
+    return select.evaluate(
+        "(s, v) => { const o = s.options[s.selectedIndex];"
+        " return !!o && (o.value === v || o.label.trim() === v); }",
+        value,
+    )
 
 
 def download_lotto_draws(
@@ -123,14 +161,22 @@ def download_lotto_draws(
                         log_to_file(f"[*] Επιλογή έτους {year} στο τμήμα «Αρχείο Αποτελεσμάτων»...", LOG_FILE)
                         try:
                             with page.expect_download(timeout=15000) as download_info:
-                                download_select.select_option(year)
+                                if is_option_selected(download_select, year):
+                                    # Το έτος είναι ήδη επιλεγμένο, οπότε το select_option δεν θα
+                                    # έστελνε change event· το στέλνουμε ρητά.
+                                    download_select.dispatch_event("change")
+                                else:
+                                    download_select.select_option(year)
                             download = download_info.value
-                            suggested_filename = download.suggested_filename or f"lotto_{year}.xlsx"
-                            save_path = output_dir / suggested_filename
+                            save_path = output_dir / target_filename(year)
                             download.save_as(save_path)
-                            downloaded_file_path = save_path
-                            print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
-                            log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            if is_valid_download(save_path):
+                                downloaded_file_path = save_path
+                                print(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}")
+                                log_to_file(f"[✓] Το αρχείο κατέβηκε επιτυχώς μέσω του browser: {save_path}", LOG_FILE)
+                            else:
+                                print(f"[-] Το αρχείο από τον browser δεν είναι έγκυρο xlsx: {save_path}")
+                                log_to_file(f"[-] Το αρχείο από τον browser δεν είναι έγκυρο xlsx: {save_path}", LOG_FILE)
                         except Exception as e:
                             print(f"[-] Αναμονή download event: {e}")
                             log_to_file(f"[-] Αναμονή download event: {e}", LOG_FILE)
@@ -146,8 +192,8 @@ def download_lotto_draws(
         log_to_file(f"[!] Σφάλμα εκκίνησης Playwright: {e}", LOG_FILE)
 
     # 2. Εναλλακτική άμεση λήψη από το επίσημο media repository αν δεν ολοκληρώθηκε μέσω browser
-    if not downloaded_file_path or not downloaded_file_path.exists() or downloaded_file_path.stat().st_size == 0:
-        direct_url = f"https://media.opap.gr/Excel_xlsx/5103/lotto_{year}.xlsx"
+    if not is_valid_download(downloaded_file_path):
+        direct_url = f"https://media.opap.gr/Excel_xlsx/5103/{target_filename(year)}"
         print(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}")
         log_to_file(f"[*] Δοκιμή άμεσης λήψης από: {direct_url}", LOG_FILE)
         try:
@@ -157,10 +203,13 @@ def download_lotto_draws(
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
             )
-            save_path = output_dir / f"lotto_{year}.xlsx"
+            save_path = output_dir / target_filename(year)
             with urllib.request.urlopen(req, timeout=15) as resp:
-                if resp.status == 200:
-                    data = resp.read()
+                data = resp.read() if resp.status == 200 else b""
+                if not zipfile.is_zipfile(io.BytesIO(data)):
+                    print("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.")
+                    log_to_file("[-] Η άμεση λήψη δεν επέστρεψε έγκυρο αρχείο xlsx.", LOG_FILE)
+                else:
                     save_path.write_bytes(data)
                     downloaded_file_path = save_path
                     print(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)")
@@ -168,6 +217,9 @@ def download_lotto_draws(
         except Exception as e:
             print(f"[-] Σφάλμα άμεσης λήψης: {e}")
             log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}", LOG_FILE)
+
+    if not is_valid_download(downloaded_file_path):
+        return None
 
     return downloaded_file_path
 
@@ -184,8 +236,15 @@ def copy_to_env_path(file_path: Path) -> Path | None:
         destination_dir.mkdir(parents=True, exist_ok=True)
 
         destination_file = destination_dir / file_path.name
+        temp_file = destination_dir / f".{file_path.name}.tmp"
 
-        shutil.copy2(file_path, destination_file)
+        # Αντιγραφή σε προσωρινό αρχείο και atomic αντικατάσταση, ώστε ο
+        # προορισμός να μη μείνει ποτέ μισογραμμένος.
+        try:
+            shutil.copy2(file_path, temp_file)
+            os.replace(temp_file, destination_file)
+        finally:
+            temp_file.unlink(missing_ok=True)
 
         print(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}")
         log_to_file(f"[✓] Το αρχείο αντιγράφηκε στο: {destination_file}", LOG_FILE)
@@ -224,15 +283,6 @@ def change_file_owner(file_path: Path) -> None:
         print(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}")
         log_to_file(f"[✓] Ο owner του αρχείου άλλαξε σε: {DEST_OWNER}", LOG_FILE)
 
-        subprocess.run(
-            ["php", "artisan", CACHE_COMMAND],
-            cwd=MAIN_DEST_PATH,
-            capture_output=True,
-            text=True
-        )
-        print(f"[✓] Cache completed")
-        log_to_file(f"[✓] Cache completed", LOG_FILE)
-
     except KeyError:
         print(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.")
         log_to_file(f"[-] Ο χρήστης '{DEST_OWNER}' δεν υπάρχει στο σύστημα.", LOG_FILE)
@@ -240,9 +290,72 @@ def change_file_owner(file_path: Path) -> None:
         print(f"[-] Σφάλμα αλλαγής owner: {e}")
         log_to_file(f"[-] Σφάλμα αλλαγής owner: {e}", LOG_FILE)
 
-def main():
+
+def refresh_cache() -> bool:
+    """Τρέχει την εντολή artisan που ανανεώνει το cache της εφαρμογής."""
+    if not CACHE_COMMAND:
+        print("[!] Δεν έχει οριστεί το LOTTO_CACHE_COMMAND στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το LOTTO_CACHE_COMMAND στο .env", LOG_FILE)
+        return False
+
+    if not MAIN_DEST_PATH or not Path(MAIN_DEST_PATH).is_dir():
+        print(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}")
+        log_to_file(f"[!] Το MAIN_DEST_PATH στο .env δεν είναι έγκυρος φάκελος: {MAIN_DEST_PATH}", LOG_FILE)
+        return False
+
+    try:
+        result = subprocess.run(
+            ["php", "artisan", *shlex.split(CACHE_COMMAND)],
+            cwd=MAIN_DEST_PATH,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+    except FileNotFoundError:
+        print("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.")
+        log_to_file("[-] Το εκτελέσιμο 'php' δεν βρέθηκε στο PATH.", LOG_FILE)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.")
+        log_to_file(f"[-] Λήξη χρόνου κατά την εκτέλεση του 'php artisan {CACHE_COMMAND}'.", LOG_FILE)
+        return False
+
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout).strip()
+        print(f"[-] Αποτυχία ανανέωσης cache (exit code {result.returncode}): {output}")
+        log_to_file(f"[-] Αποτυχία ανανέωσης cache (exit code {result.returncode}): {output}", LOG_FILE)
+        return False
+
+    print(f"[✓] Cache completed: php artisan {CACHE_COMMAND}")
+    log_to_file(f"[✓] Cache completed: php artisan {CACHE_COMMAND}", LOG_FILE)
+    return True
+
+def download_and_install(year: str, url: str, output_dir: Path, headless: bool) -> Path | None:
+    """Κατεβάζει το αρχείο ενός έτους και το εγκαθιστά στο LOTTO_DEST_PATH."""
+    result = download_lotto_draws(
+        url=url,
+        year=year,
+        output_dir=output_dir,
+        headless=headless
+    )
+
+    if not is_valid_download(result):
+        print(f"\n[!] Δεν ήταν δυνατή η λήψη του αρχείου για το έτος {year}.")
+        log_to_file(f"[!] Δεν ήταν δυνατή η λήψη του αρχείου για το έτος {year}.", LOG_FILE)
+        return None
+
+    print(f"\n[✓] Η λήψη ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
+    log_to_file(f"[✓] Η λήψη ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
+
+    destination_file = copy_to_env_path(result)
+    if destination_file:
+        change_file_owner(destination_file)
+    return destination_file
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="Λήψη αρχείου αποτελεσμάτων Λόττο από το allwyn.gr")
-    parser.add_argument("--year", default=TARGET_YEAR, help="Το έτος των κληρώσεων (προεπιλογή: 2026)")
+    parser.add_argument("--year", help="Το έτος των κληρώσεων (προεπιλογή: το τρέχον έτος, μαζί με το προηγούμενο τις πρώτες μέρες του Ιανουαρίου)")
     parser.add_argument("--url", default=URL, help="Το URL της σελίδας αποτελεσμάτων")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR), help="Φάκελος αποθήκευσης του αρχείου")
     parser.add_argument("--headless", action="store_true", default=True, help="Εκτέλεση του browser σε headless mode")
@@ -250,25 +363,25 @@ def main():
 
     args = parser.parse_args()
 
+    years = [(args.year, True)] if args.year else years_to_download(date.today())
     output_directory = Path(args.output_dir)
-    result = download_lotto_draws(
-        url=args.url,
-        year=args.year,
-        output_dir=output_directory,
-        headless=args.headless
-    )
 
-    if result and os.path.exists(result):
-        print(f"\n[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}")
-        log_to_file(f"[✓] Η διαδικασία ολοκληρώθηκε επιτυχώς. Αρχείο: {result}", LOG_FILE)
-        destination_file = copy_to_env_path(result)
+    failed = False
+    installed_any = False
+    for year, required in years:
+        if download_and_install(year, args.url, output_directory, args.headless):
+            installed_any = True
+        elif required:
+            failed = True
+        else:
+            print(f"[*] Το αρχείο του {year} δεν είναι ακόμα διαθέσιμο (αναμενόμενο στις αρχές της χρονιάς).")
+            log_to_file(f"[*] Το αρχείο του {year} δεν είναι ακόμα διαθέσιμο (αναμενόμενο στις αρχές της χρονιάς).", LOG_FILE)
 
-        if destination_file:
-            change_file_owner(destination_file)
-    else:
-        print("\n[!] Δεν ήταν δυνατή η λήψη του αρχείου.")
-        log_to_file("[!] Δεν ήταν δυνατή η λήψη του αρχείου.", LOG_FILE)
+    if installed_any and not refresh_cache():
+        failed = True
+
+    return 1 if failed or not installed_any else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
