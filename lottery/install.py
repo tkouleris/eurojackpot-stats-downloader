@@ -55,11 +55,16 @@ def change_owner(file_path: Path, settings: Settings) -> None:
 
     try:
         uid = pwd.getpwnam(settings.owner).pw_uid
-        gid = grp.getgrnam(settings.group).gr_gid
-        os.chown(file_path, uid, gid)
     except KeyError:
         log.info(f"[-] User '{settings.owner}' does not exist on this system.")
         return
+    try:
+        gid = grp.getgrnam(settings.group).gr_gid
+    except KeyError:
+        log.info(f"[-] Group '{settings.group}' does not exist on this system.")
+        return
+    try:
+        os.chown(file_path, uid, gid)
     except OSError as e:
         log.info(f"[-] Owner change error: {e}")
         return
