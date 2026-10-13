@@ -24,20 +24,29 @@ def refresh_cache(settings: Settings) -> None:
         raise CacheError(f"MAIN_DEST_PATH in .env is not a valid directory: {cwd}")
 
     try:
+        arguments = shlex.split(command)
+    except ValueError as e:
+        raise CacheError(f"{settings.env_prefix}_CACHE_COMMAND in .env cannot be parsed: {e}") from None
+
+    try:
         result = subprocess.run(
-            ["php", "artisan", *shlex.split(command)],
+            ["php", "artisan", *arguments],
             cwd=cwd,
             capture_output=True,
-            text=True,
+            # artisan writes UTF-8; the locale encoding (e.g. cp1253 on Windows) can't decode all of it.
+            encoding="utf-8",
+            errors="replace",
             timeout=300,
         )
     except FileNotFoundError:
         raise CacheError("The 'php' executable was not found on PATH.") from None
     except subprocess.TimeoutExpired:
         raise CacheError(f"Timed out running 'php artisan {command}'.") from None
+    except OSError as e:
+        raise CacheError(f"Could not run 'php artisan {command}': {e}") from e
 
     if result.returncode != 0:
-        output = (result.stderr or result.stdout).strip()
+        output = result.stderr.strip() or result.stdout.strip()
         raise CacheError(f"Cache refresh failed (exit code {result.returncode}): {output}")
 
     log.info(f"[✓] Cache completed: php artisan {command}")
