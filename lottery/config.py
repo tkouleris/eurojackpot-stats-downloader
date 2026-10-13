@@ -74,3 +74,15 @@ JOKER = GameConfig(
     filename_template="Joker_{year}.xlsx",
     log_file=PROJECT_DIR / "log_joker.txt",
 )
+
+LOTTO = GameConfig(
+    name="Lotto",
+    env_prefix="LOTTO",
+    page_url="https://www.allwyn.gr/el/lotto/draws-results",
+    media_id=5103,
+    filename_template="lotto_{year}.xlsx",
+    log_file=PROJECT_DIR / "log_lotto.txt",
+    dropdown_selectors=(".download select", "select.archive"),
+    fallback_selector="select[aria-label='Έτος'], select.archive",
+    fallback_index=-1,
+)
