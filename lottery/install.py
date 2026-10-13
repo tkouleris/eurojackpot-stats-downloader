@@ -44,11 +44,9 @@ def change_owner(file_path: Path, settings: Settings) -> None:
         return
 
     if not settings.owner:
-        log.info("[!] OWNER is not set in .env")
-        return
+        raise InstallError("OWNER is not set in .env")
     if not settings.group:
-        log.info("[!] GROUP is not set in .env")
-        return
+        raise InstallError("GROUP is not set in .env")
 
     import grp
     import pwd
@@ -56,16 +54,13 @@ def change_owner(file_path: Path, settings: Settings) -> None:
     try:
         uid = pwd.getpwnam(settings.owner).pw_uid
     except KeyError:
-        log.info(f"[-] User '{settings.owner}' does not exist on this system.")
-        return
+        raise InstallError(f"User '{settings.owner}' does not exist on this system.") from None
     try:
         gid = grp.getgrnam(settings.group).gr_gid
     except KeyError:
-        log.info(f"[-] Group '{settings.group}' does not exist on this system.")
-        return
+        raise InstallError(f"Group '{settings.group}' does not exist on this system.") from None
     try:
         os.chown(file_path, uid, gid)
     except OSError as e:
-        log.info(f"[-] Owner change error: {e}")
-        return
-    log.info(f"[✓] File owner changed to: {settings.owner}")
+        raise InstallError(f"Owner change error: {e}") from e
+    log.info(f"[✓] File owner changed to: {settings.owner}:{settings.group}")

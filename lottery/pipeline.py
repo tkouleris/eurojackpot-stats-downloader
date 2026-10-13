@@ -73,9 +73,7 @@ def download_and_install(
     """Downloads the file of one year and installs it in <GAME>_DEST_PATH."""
     downloaded = download(game, year, output_dir, sources)
     log.info(f"[✓] Download completed. File: {downloaded}")
-    installed = install_file(downloaded, settings)
-    change_owner(installed, settings)
-    return installed
+    return install_file(downloaded, settings)
 
 
 def run(
@@ -105,18 +103,26 @@ def run(
         installed_any = False
         for year, required in years:
             try:
-                download_and_install(game, year, settings, args.output_dir, sources)
+                installed = download_and_install(game, year, settings, args.output_dir, sources)
             except DownloadError as e:
                 if required:
                     log.error(f"[!] {e}")
                     failed = True
                 else:
                     log.info(f"[*] The {year} file is not available yet (expected early in the year).")
+                continue
             except InstallError as e:
                 log.error(f"[!] {e}")
                 failed = True
-            else:
-                installed_any = True
+                continue
+
+            # The file is in place even if the owner change fails, so the cache is still refreshed.
+            installed_any = True
+            try:
+                change_owner(installed, settings)
+            except InstallError as e:
+                log.error(f"[!] {e}")
+                failed = True
 
         if installed_any:
             try:
