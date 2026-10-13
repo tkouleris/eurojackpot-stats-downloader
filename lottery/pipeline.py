@@ -40,9 +40,16 @@ def years_to_download(today: date) -> list[tuple[str, bool]]:
     return [(current, True)]
 
 
+def year_argument(value: str) -> str:
+    """argparse type for --year: a four-digit year, which also keeps it safe in paths and URLs."""
+    if len(value) != 4 or not value.isdigit():
+        raise argparse.ArgumentTypeError(f"expected a four-digit year such as 2026, got {value!r}")
+    return value
+
+
 def parse_args(game: GameConfig, argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=f"Download the {game.name} results file from allwyn.gr")
-    parser.add_argument("--year", help="Draw year (default: the current year, plus the previous year during the first days of January)")
+    parser.add_argument("--year", type=year_argument, help="Draw year (default: the current year, plus the previous year during the first days of January)")
     parser.add_argument("--url", default=game.page_url, help="URL of the results page")
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR, help="Directory to save the file in")
     parser.add_argument(
