@@ -20,10 +20,13 @@ def install_file(file_path: Path, settings: Settings) -> Path:
         raise InstallError(f"{settings.env_prefix}_DEST_PATH is not set in .env")
 
     destination_dir = Path(settings.dest_path)
+    # Not created on the fly: a typo in .env would install the file where the app never looks.
+    if not destination_dir.is_dir():
+        raise InstallError(f"{settings.env_prefix}_DEST_PATH in .env is not an existing directory: {destination_dir}")
+
     destination_file = destination_dir / file_path.name
     temp_file = destination_dir / f".{file_path.name}.tmp"
     try:
-        destination_dir.mkdir(parents=True, exist_ok=True)
         # Copy to a temp file and replace atomically, so the
         # destination is never left half-written.
         try:
