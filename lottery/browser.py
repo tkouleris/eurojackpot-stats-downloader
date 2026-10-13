@@ -1,6 +1,5 @@
 """Step 1: download the file from the results page with Playwright."""
 import logging
-import time
 from pathlib import Path
 
 from playwright.sync_api import Error as PlaywrightError
@@ -33,7 +32,6 @@ def download_via_browser(game: GameConfig, year: str, output_dir: Path, *, headl
                 page = context.new_page()
                 log.info("[*] Loading page...")
                 page.goto(game.page_url, wait_until="domcontentloaded", timeout=45000)
-                time.sleep(2)
 
                 _accept_cookies(page)
                 select = _find_year_dropdown(page, game)
@@ -83,9 +81,11 @@ def _accept_cookies(page: Page) -> None:
     log.info("[*] Accepting cookies...")
     try:
         button.click()
-        time.sleep(1)
     except PlaywrightError as e:
         log.info(f"[-] Could not click the cookie button: {e}")
+        return
+    if not is_hidden_within(button, 5000):
+        log.info("[-] The cookie banner did not close.")
 
 
 def _find_year_dropdown(page: Page, game: GameConfig) -> Locator:
@@ -109,6 +109,15 @@ def is_visible_within(locator: Locator, timeout: int) -> bool:
     """Waits up to `timeout` ms for the element to become visible (is_visible doesn't wait)."""
     try:
         locator.wait_for(state="visible", timeout=timeout)
+        return True
+    except PlaywrightError:
+        return False
+
+
+def is_hidden_within(locator: Locator, timeout: int) -> bool:
+    """Waits up to `timeout` ms for the element to be hidden or removed."""
+    try:
+        locator.wait_for(state="hidden", timeout=timeout)
         return True
     except PlaywrightError:
         return False
