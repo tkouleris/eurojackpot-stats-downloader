@@ -12,7 +12,7 @@ Three standalone Python scripts that download yearly draw-result spreadsheets (`
 | `joker.py` | Joker (Tzoker) | `/el/tzoker/draws-results` | `.../5104/Joker_{year}.xlsx` | `JOKER_` | `log_joker.txt` |
 | `lotto.py` | Lotto | `/el/lotto/draws-results` | `.../5103/lotto_{year}.xlsx` | `LOTTO_` | `log_lotto.txt` |
 
-`helpers.py` only holds `log_to_file(message, log_file)`. Comments, docstrings, prints, log messages and CLI help are written in English in `eurojackpot.py` and `joker.py`; `lotto.py` still has them in Greek. Greek text that matches the site (cookie button labels, `aria-label='Έτος'`) must stay Greek.
+`helpers.py` only holds `log_to_file(message, log_file)`. Comments, docstrings, prints, log messages and CLI help are written in English in all three scripts. Greek text that matches the site (cookie button labels, `aria-label='Έτος'`) must stay Greek.
 
 The README is out of date. It refers to `main.py`, which doesn't exist, and to `log.txt`. Run the individual scripts instead.
 
@@ -62,7 +62,7 @@ diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
 ## Debugging
 
 - **Start with the logs.** `log_<game>.txt` holds the full history of runs, one timestamped line per message. The files are append-only and never rotated.
-- **The browser step depends on allwyn.gr's HTML.** If it breaks, run with `--no-headless` to watch the page. The direct-download fallback hides browser failures, so a successful run doesn't mean the browser step worked; the log says which source the file came from ("File downloaded via the browser" vs "File downloaded directly"; older log lines and `lotto.py` use the Greek "μέσω του browser" vs "λήφθηκε επιτυχώς").
+- **The browser step depends on allwyn.gr's HTML.** If it breaks, run with `--no-headless` to watch the page. The direct-download fallback hides browser failures, so a successful run doesn't mean the browser step worked; the log says which source the file came from ("File downloaded via the browser" vs "File downloaded directly"; older log lines use the Greek "μέσω του browser" vs "λήφθηκε επιτυχώς").
 
 ## Pipeline (per script)
 
@@ -88,8 +88,6 @@ Remaining differences in `lotto.py` (browser step only):
 
 - **Fallback selector:** it also looks for `select.archive`, and its fallback picks `candidates.last` instead of `candidates.nth(1)`.
 - **No `is_visible_within`:** Playwright's `locator.is_visible(timeout=...)` ignores the timeout and returns immediately. `eurojackpot.py` and `joker.py` therefore wait with `wait_for(state="visible")` (5 s for the cookie banner, 10 s for the dropdown). `lotto.py` still calls `is_visible(timeout=...)` and checks the cookie selectors one by one, so on a slow page it can miss the banner or skip to the fallback selector.
-- Messages, comments and CLI help are in Greek.
-
 ## Known open issues (all three scripts)
 
 - `change_file_owner` catches `KeyError` from both `pwd.getpwnam` and `grp.getgrnam`, but always reports that the *user* doesn't exist, even when the group is missing.
