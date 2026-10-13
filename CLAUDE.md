@@ -10,7 +10,7 @@ Three standalone Python scripts that download yearly draw-result spreadsheets (`
 |---|---|---|---|---|---|
 | `eurojackpot.py` | Eurojackpot | `/el/eurojackpot/draws-results` | `media.opap.gr/Excel_xlsx/5149/Eurojackpot_{year}.xlsx` | `EUROJACKPOT_` | `log_eurojackpot.txt` |
 | `joker.py` | Joker (Tzoker) | `/el/tzoker/draws-results` | `.../5104/Joker_{year}.xlsx` | `JOKER_` | `log_joker.txt` |
-| `lotto.py` | Lotto | `/el/lotto/draws-results` | `.../5103/Lotto_{year}.xlsx` | `LOTTO_` | `log_lotto.txt` |
+| `lotto.py` | Lotto | `/el/lotto/draws-results` | `.../5103/lotto_{year}.xlsx` | `LOTTO_` | `log_lotto.txt` |
 
 `helpers.py` only holds `log_to_file(message, log_file)`. Comments, docstrings, prints, log messages and CLI help are written in English in `eurojackpot.py` and `joker.py`; `lotto.py` still has them in Greek. Greek text that matches the site (cookie button labels, `aria-label='Έτος'`) must stay Greek.
 
@@ -56,7 +56,7 @@ diff <(sed 's/[Jj]oker\|JOKER\|5104\|tzoker/X/g' joker.py) \
 - Commits use conventional commits with the game as scope: `fix(joker): ...`, `fix(eurojackpot): ...`, `docs: ...`. One commit per logical change and per script.
 - `core.autocrlf=true`: files are checked out with CRLF line endings.
 - Every `print` is paired with a `log_to_file` call carrying the same text. Message prefixes: `[*]` progress, `[✓]` success, `[-]` a step failed, `[!]` configuration problem or serious error.
-- `log_to_file(message, log_file)` has no default for `log_file`. Always pass the module's `LOG_FILE`; forgetting it is an easy mistake when copying code between scripts (see the `lotto.py` bugs below).
+- `log_to_file(message, log_file)` has no default for `log_file`. Always pass the module's `LOG_FILE`; forgetting it is an easy mistake when copying code between scripts. The resulting `TypeError` is often swallowed by a broad `except` (`lotto.py` had three such calls).
 
 ## Debugging
 
@@ -88,6 +88,3 @@ The scripts are copy-pasted rather than sharing code. Recent fixes went into `eu
 Other differences in `lotto.py`:
 
 - It also looks for `select.archive`, and its fallback picks `candidates.last` instead of `candidates.nth(1)`.
-- **Known bugs:** two `log_to_file` calls omit the `LOG_FILE` argument, so they raise `TypeError`:
-  - `lotto.py:104` (cookie banner): the error is swallowed by `except Exception: pass`, so `btn.click()` never runs and the cookie banner is never accepted.
-  - `lotto.py:170` (direct-download `except`): the error is raised inside the `except` itself, so any direct-download failure crashes the script.

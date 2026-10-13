@@ -101,7 +101,7 @@ def download_lotto_draws(
                             btn = page.locator(selector).first
                             if btn.is_visible(timeout=1500):
                                 print("[*] Αποδοχή cookies...")
-                                log_to_file("[*] Αποδοχή cookies...")
+                                log_to_file("[*] Αποδοχή cookies...", LOG_FILE)
                                 btn.click()
                                 time.sleep(1)
                                 break
@@ -167,7 +167,7 @@ def download_lotto_draws(
                     log_to_file(f"[✓] Το αρχείο λήφθηκε επιτυχώς: {save_path} ({len(data)} bytes)", LOG_FILE)
         except Exception as e:
             print(f"[-] Σφάλμα άμεσης λήψης: {e}")
-            log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}")
+            log_to_file(f"[-] Σφάλμα άμεσης λήψης: {e}", LOG_FILE)
 
     return downloaded_file_path
 
@@ -176,7 +176,7 @@ def copy_to_env_path(file_path: Path) -> Path | None:
     """Αντιγράφει το κατεβασμένο αρχείο στο path που ορίζεται στο .env."""
     if not DEST_PATH:
         print("[!] Δεν έχει οριστεί το LOTTO_DEST_PATH στο .env")
-        log_to_file("[!] Δεν έχει οριστεί το LOTTO_DEST_PATH στο .env")
+        log_to_file("[!] Δεν έχει οριστεί το LOTTO_DEST_PATH στο .env", LOG_FILE)
         return None
 
     try:
