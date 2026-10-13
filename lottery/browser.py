@@ -6,7 +6,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, Playwright, sync_playwright
 
 from .config import GameConfig
-from .download import USER_AGENT, DownloadError, is_valid_xlsx
+from .download import USER_AGENT, DownloadError, keep_if_valid, partial_path
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ COOKIE_BUTTONS = (
 def download_via_browser(game: GameConfig, year: str, output_dir: Path, *, headless: bool = True) -> Path:
     """Selects the year in the results archive section, which triggers the download."""
     save_path = output_dir / game.filename(year)
+    temp_path = partial_path(save_path)
     try:
         with sync_playwright() as p:
             browser = _launch(p, headless)
@@ -44,14 +45,14 @@ def download_via_browser(game: GameConfig, year: str, output_dir: Path, *, headl
                         select.dispatch_event("change")
                     else:
                         select.select_option(year)
-                download_info.value.save_as(save_path)
+                download_info.value.save_as(temp_path)
             finally:
                 browser.close()
     except PlaywrightError as e:
+        temp_path.unlink(missing_ok=True)
         raise DownloadError(f"Browser step failed: {e}") from e
 
-    if not is_valid_xlsx(save_path):
-        raise DownloadError(f"Browser download is not a valid xlsx: {save_path}")
+    keep_if_valid(temp_path, save_path)
     log.info(f"[✓] File downloaded via the browser: {save_path}")
     return save_path
 
