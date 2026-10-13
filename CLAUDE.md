@@ -16,8 +16,6 @@ The entry scripts are five-line wrappers: `raise SystemExit(run(LOTTO))`. All lo
 
 Comments, docstrings, log messages and CLI help are written in English. Greek text that matches the site (cookie button labels, `aria-label='Έτος'`) must stay Greek.
 
-The README is out of date. It refers to `main.py`, which doesn't exist, and to `log.txt`. Run the individual scripts instead.
-
 ## Commands
 
 ```bash
@@ -80,6 +78,3 @@ Both sources write to a `.part` file that `keep_if_valid` moves into place only 
 
 Configuration comes from `.env` (see `.env.example`), loaded via `python-dotenv` inside `run()` into a `Settings` object (`Settings.from_env(prefix)`), not at import time.
 
-## Known open issues
-
-- `.env.example` still has a Greek comment, and the README describes the old `main.py`.
